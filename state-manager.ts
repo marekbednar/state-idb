@@ -1,7 +1,7 @@
 import { Observable, Subject } from 'rxjs';
 
 // Load worker using relative path
-const worker = new Worker('./state-worker.js');
+const worker = new Worker('./frontend/state-worker.js');
 
 interface Message {
 	action: string;
@@ -93,12 +93,13 @@ export function getRecordById(store: string, id: number): Promise<any> {
 export function setRecordById(store: string, id: number, value: any): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const handler = (event: MessageEvent<Message>) => {
+			console.log(2222, event.data)
 			if (event.data.action === 'setRecordById' && event.data.store === store) {
 				worker.removeEventListener('message', handler);
 				if (event.data.error) {
 					reject(event.data.error);
 				} else {
-					resolve();
+					resolve(event.data.record);
 				}
 			}
 		};

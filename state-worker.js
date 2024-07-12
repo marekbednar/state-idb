@@ -159,6 +159,8 @@ async function setRecordById(store, id, value) {
 			// Update the record with the new value
 			Object.assign(record, value);
 			objectStore.put(record);
+			console.log('Record put', value);
+			postMessage({ action: 'setRecordById', store, record: record });
 		} else {
 			console.error('Record not found:', id);
 		}
