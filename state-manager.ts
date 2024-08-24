@@ -17,9 +17,13 @@ interface Message {
 	query?: string;
 	record?: any;
 	error?: any;
+	operationId: number;
 }
 
 const stateSubject = new Subject<any>();
+
+//TODO add id for every message to be able to distinguish between different messages
+let operationId = 0;
 
 worker.onmessage = (event: MessageEvent<Message>) => {
 	if (event.data.action === 'stateUpdate') {
@@ -29,72 +33,89 @@ worker.onmessage = (event: MessageEvent<Message>) => {
 	}
 };
 
-export function initializeDatabase(store: string, indexes: { name: string; keyPath: string }[]) {
-	worker.postMessage({ action: 'initializeDatabase', store, indexes });
+export interface IStoreObject {
+	store: string,
+	indexes: { name: string; keyPath: string }[],
+	settings?: Object
+}
+
+export function initializeDatabase(stores: IStoreObject[]) {
+	const postId = operationId++;
+	worker.postMessage({ action: 'initializeDatabase', stores, operationId: postId });
 }
 
 export function setState(value: any[], store: string) {
-	worker.postMessage({ action: 'setState', value, store });
+	const postId = operationId++;
+	worker.postMessage({ action: 'setState', value, store, operationId: postId });
 }
 
 export function getState(store: string): Promise<any> {
+	const postId = operationId++;
 	return new Promise<any>((resolve) => {
 		const handler = (event: MessageEvent<Message>) => {
-			if (event.data.action === 'getState') {
+			if (event.data.operationId === postId && event.data.action === 'getState') {
 				worker.removeEventListener('message', handler);
 				resolve(event.data.state);
 			}
 		};
 		worker.addEventListener('message', handler);
-		worker.postMessage({ action: 'getState', store });
+		worker.postMessage({ action: 'getState', store, operationId: postId });
 	});
 }
 
+export function clearState(store: string) {
+	const postId = operationId++;
+	worker.postMessage({ action: 'clearState', store, operationId: postId });
+}
+
 export function queryState(query: (item: any) => boolean, store: string): Promise<any[]> {
-	return new Promise<any[]>((resolve) => {
+	const postId = operationId++;
+	return new Promise((resolve) => {
 		const handler = (event: MessageEvent<Message>) => {
-			if (event.data.action === 'queryState') {
+			if (event.data.operationId === postId && event.data.action === 'queryState') {
 				worker.removeEventListener('message', handler);
 				resolve(event.data.results);
 			}
 		};
 		worker.addEventListener('message', handler);
-		worker.postMessage({ action: 'queryState', query: query.toString(), store });
+		worker.postMessage({ action: 'queryState', query: query.toString(), store, operationId: postId });
 	});
 }
 
 export function queryRange(store: string, index: string, rangeType: string, rangeParams: any[]): Promise<any[]> {
+	const postId = operationId++;
 	return new Promise<any[]>((resolve) => {
 		const handler = (event: MessageEvent<Message>) => {
-			if (event.data.action === 'queryRange' && event.data.store === store) {
+			if (event.data.operationId === postId && event.data.action === 'queryRange' && event.data.store === store) {
 				worker.removeEventListener('message', handler);
 				resolve(event.data.results);
 			}
 		};
 		worker.addEventListener('message', handler);
-		worker.postMessage({ action: 'queryRange', store, index, rangeType, rangeParams });
+		worker.postMessage({ action: 'queryRange', store, index, rangeType, rangeParams, operationId: postId });
 	});
 }
 
 
-export function getRecordById(store: string, id: number): Promise<any> {
+export function getRecordById(store: string, id: number | string): Promise<any> {
+	const postId = operationId++;
 	return new Promise((resolve) => {
 		const handler = (event: MessageEvent<Message>) => {
-			if (event.data.action === 'getRecordById' && event.data.store === store) {
+			if (event.data.operationId === postId && event.data.action === 'getRecordById' && event.data.store === store && event.data.id === id) {
 				worker.removeEventListener('message', handler);
 				resolve(event.data.record);
 			}
 		};
 		worker.addEventListener('message', handler);
-		worker.postMessage({ action: 'getRecordById', store, id });
+		worker.postMessage({ action: 'getRecordById', store, id, operationId: postId });
 	});
 }
 
-export function setRecordById(store: string, id: number, value: any): Promise<void> {
+export function setRecordById(store: string, id: number | string, value: any): Promise<void> {
+	const postId = operationId++;
 	return new Promise((resolve, reject) => {
 		const handler = (event: MessageEvent<Message>) => {
-			console.log(2222, event.data)
-			if (event.data.action === 'setRecordById' && event.data.store === store) {
+			if (event.data.operationId === postId && event.data.action === 'setRecordById' && event.data.store === store) {
 				worker.removeEventListener('message', handler);
 				if (event.data.error) {
 					reject(event.data.error);
@@ -104,7 +125,7 @@ export function setRecordById(store: string, id: number, value: any): Promise<vo
 			}
 		};
 		worker.addEventListener('message', handler);
-		worker.postMessage({ action: 'setRecordById', store, id, value });
+		worker.postMessage({ action: 'setRecordById', store, id, value, operationId: postId });
 	});
 }
 
